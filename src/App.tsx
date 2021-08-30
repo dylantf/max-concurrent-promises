@@ -2,8 +2,8 @@ import { CSSProperties, useEffect, useReducer } from "react";
 import PQueue from "p-queue/dist";
 
 const WORKER_POOL = 5;
-const TOTAL_PARTS = 100;
-const MAX_DELAY = 1000; // ms
+const TOTAL_PARTS = 500;
+const MAX_DELAY = 100; // ms
 const FAIL_RATE = 20; // percent
 
 type Part = {
@@ -150,20 +150,20 @@ function App() {
   const partStyle = (part: Part) => {
     const base: CSSProperties = {
       fontFamily: "Helvetica, Arial, sans-serif",
-      backgroundColor: "#efefef",
-      margin: "5px",
+      backgroundColor: "#bbbbbb",
+      margin: 0,
       display: "inline-block",
-      width: "45px",
-      padding: "3px",
+      width: `${(1 / state.items.length) * 100}%`,
+      height: "20px",
     };
     if (part.success === true) {
       base.backgroundColor = "green";
-      base.fontWeight = "bold";
-      base.color = "white";
+      // base.fontWeight = "bold";
+      // base.color = "white";
     } else if (part.success === false) {
       base.backgroundColor = "red";
-      base.fontWeight = "bold";
-      base.color = "white";
+      // base.fontWeight = "bold";
+      // base.color = "white";
     }
     return base;
   };
@@ -181,10 +181,13 @@ function App() {
       </button>
 
       <p>
-        Press the run button to asynchronously process the chunks in a queue,
+        Press the run button to asynchronously process the items in a queue,
         with a maximum of {WORKER_POOL} concurrently.
       </p>
-      <p>There is a {FAIL_RATE}% chance for each chunk to fail.</p>
+      <p>
+        There is a {FAIL_RATE}% chance for each item to fail. When the queue has
+        completed, press Run again to retry the failed parts.
+      </p>
       <button
         type="button"
         onClick={run}
@@ -193,7 +196,7 @@ function App() {
         Run
       </button>
 
-      <div style={{ marginTop: "20px", maxWidth: "50%" }}>
+      <div style={{ marginTop: "20px", maxWidth: "100%" }}>
         {state.items.length > 0 && (
           <div>
             Progress ({Math.ceil((numDone / state.items.length) * 100)}
@@ -201,11 +204,11 @@ function App() {
           </div>
         )}
         {state.items.map((part) => (
-          <span key={part.id} style={partStyle(part)}>
-            {part.id} {part.success === null && "⌛"}
+          <div key={part.id} style={partStyle(part)}>
+            {/* {part.id} {part.success === null && "⌛"}
             {part.success === true && "✅"}
-            {part.success === false && "❌"}{" "}
-          </span>
+            {part.success === false && "❌"}{" "} */}
+          </div>
         ))}
       </div>
     </div>
