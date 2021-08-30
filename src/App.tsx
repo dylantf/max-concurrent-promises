@@ -171,7 +171,7 @@ function App() {
   return (
     <div style={{ maxWidth: "100%" }}>
       <h1>Batched processing</h1>
-      <p>Press initialize to create 100 items.</p>
+      <p>Press initialize to create {TOTAL_PARTS} items.</p>
       <button
         type="button"
         onClick={handleInitialize}
