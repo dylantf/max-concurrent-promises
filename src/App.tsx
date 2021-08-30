@@ -40,7 +40,11 @@ const reducer = (prevState: State, action: Action): State => {
       return { ...prevState, items: action.payload };
 
     case "START_UPLOAD":
-      return { ...prevState, isUploading: true };
+      const resetItems = prevState.items.map((p) => {
+        if (p.success) return p;
+        return { ...p, success: null };
+      });
+      return { ...prevState, isUploading: true, items: resetItems };
 
     case "UPLOAD_SUCCESS":
       const idx = prevState.items.findIndex((i) => i.id === action.payload);
@@ -77,7 +81,7 @@ function App() {
   const [state, dispatch] = useReducer(reducer, initialState());
   console.log("State:", state);
 
-  async function run() {
+  function handleInitialize() {
     const fakeParts = Array(TOTAL_PARTS)
       .fill(undefined)
       .map((_, i) => i);
@@ -86,10 +90,15 @@ function App() {
       type: "ADD_ITEMS",
       payload: fakeParts.map((id) => ({ id, success: null })),
     });
+  }
+
+  async function run() {
+    dispatch({ type: "START_UPLOAD" });
 
     const queue = new PQueue({ concurrency: WORKER_POOL, autoStart: false });
 
-    for (const id of fakeParts) {
+    const toProcess = state.items.filter((part) => part.success !== true);
+    for (const { id } of toProcess) {
       const task = async () =>
         await new Promise(async (resolve) => {
           const delay = Math.ceil(Math.random() * MAX_DELAY);
@@ -135,6 +144,7 @@ function App() {
   }, [state.isUploading, state.items]);
 
   const numFailed = getFailedParts(state.items).length;
+  const numPending = state.items.filter((p) => p.success === null).length;
   const numDone = state.items.filter((p) => p.success !== null).length;
 
   const partStyle = (part: Part) => {
@@ -160,12 +170,30 @@ function App() {
 
   return (
     <div style={{ maxWidth: "100%" }}>
-      <h1>Pretend Queue</h1>
-      <button type="button" onClick={run}>
+      <h1>Batched processing</h1>
+      <p>Press initialize to create 100 "chunks".</p>
+      <button
+        type="button"
+        onClick={handleInitialize}
+        disabled={state.isUploading}
+      >
+        Initialize
+      </button>
+
+      <p>
+        Press the run button to "process" the chunks in a queue, with a maximum
+        of {WORKER_POOL} at a time.
+      </p>
+      <p>There is a {FAIL_RATE}% chance for each chunk to fail.</p>
+      <button
+        type="button"
+        onClick={run}
+        disabled={state.isUploading || (!numPending && !numFailed)}
+      >
         Run
       </button>
 
-      <div style={{ maxWidth: "50%" }}>
+      <div style={{ marginTop: "20px", maxWidth: "50%" }}>
         {state.items.length > 0 && (
           <div>
             Progress ({Math.ceil((numDone / state.items.length) * 100)}
