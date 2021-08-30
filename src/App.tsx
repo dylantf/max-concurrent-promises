@@ -4,7 +4,7 @@ import PQueue from "p-queue/dist";
 const WORKER_POOL = 5;
 const TOTAL_PARTS = 100;
 const MAX_DELAY = 1000; // ms
-const FAIL_RATE = 10; // percent
+const FAIL_RATE = 20; // percent
 
 type Part = {
   id: number;
@@ -171,7 +171,7 @@ function App() {
   return (
     <div style={{ maxWidth: "100%" }}>
       <h1>Batched processing</h1>
-      <p>Press initialize to create 100 "chunks".</p>
+      <p>Press initialize to create 100 items.</p>
       <button
         type="button"
         onClick={handleInitialize}
@@ -181,8 +181,8 @@ function App() {
       </button>
 
       <p>
-        Press the run button to "process" the chunks in a queue, with a maximum
-        of {WORKER_POOL} at a time.
+        Press the run button to asynchronously process the chunks in a queue,
+        with a maximum of {WORKER_POOL} concurrently.
       </p>
       <p>There is a {FAIL_RATE}% chance for each chunk to fail.</p>
       <button
