@@ -1,24 +1,185 @@
-import React from 'react';
-import logo from './logo.svg';
-import './App.css';
+import { CSSProperties, useEffect, useReducer } from "react";
+import PQueue from "p-queue/dist";
+
+const WORKER_POOL = 5;
+const TOTAL_PARTS = 100;
+const MAX_DELAY = 1000; // ms
+const FAIL_RATE = 10; // percent
+
+type Part = {
+  id: number;
+  success: null | boolean;
+};
+
+const fakeHttpRequest = (delay: number) =>
+  new Promise((resolve, reject) => {
+    setTimeout(() => {
+      const success = Math.ceil(Math.random() * 100) > FAIL_RATE;
+      success ? resolve(null) : reject();
+    }, delay);
+  });
+
+type State = {
+  isUploading: boolean;
+  items: Part[];
+};
+
+type Action =
+  | { type: "ADD_ITEMS"; payload: Part[] }
+  | { type: "START_UPLOAD" }
+  | { type: "UPLOAD_SUCCESS"; payload: number }
+  | { type: "UPLOAD_FAILED"; payload: number };
+
+const reducer = (prevState: State, action: Action): State => {
+  console.log("action:", action);
+  const anyItemsPending = (items: Part[]) =>
+    items.filter((p) => p.success === null).length > 0;
+
+  switch (action.type) {
+    case "ADD_ITEMS":
+      return { ...prevState, items: action.payload };
+
+    case "START_UPLOAD":
+      return { ...prevState, isUploading: true };
+
+    case "UPLOAD_SUCCESS":
+      const idx = prevState.items.findIndex((i) => i.id === action.payload);
+      const nextItem: Part = { ...prevState.items[idx], success: true };
+      const items = [
+        ...prevState.items.slice(0, idx),
+        nextItem,
+        ...prevState.items.slice(idx + 1),
+      ];
+      return { ...prevState, items, isUploading: anyItemsPending(items) };
+
+    case "UPLOAD_FAILED":
+      const idx1 = prevState.items.findIndex((i) => i.id === action.payload);
+      const nextItem1: Part = { ...prevState.items[idx1], success: false };
+      const items1 = [
+        ...prevState.items.slice(0, idx1),
+        nextItem1,
+        ...prevState.items.slice(idx1 + 1),
+      ];
+      return {
+        ...prevState,
+        items: items1,
+        isUploading: anyItemsPending(items1),
+      };
+
+    default:
+      return prevState;
+  }
+};
+
+const initialState = (): State => ({ isUploading: false, items: [] });
 
 function App() {
+  const [state, dispatch] = useReducer(reducer, initialState());
+  console.log("State:", state);
+
+  async function run() {
+    const fakeParts = Array(TOTAL_PARTS)
+      .fill(undefined)
+      .map((_, i) => i);
+
+    dispatch({
+      type: "ADD_ITEMS",
+      payload: fakeParts.map((id) => ({ id, success: null })),
+    });
+
+    const queue = new PQueue({ concurrency: WORKER_POOL, autoStart: false });
+
+    for (const id of fakeParts) {
+      const task = async () =>
+        await new Promise(async (resolve) => {
+          const delay = Math.ceil(Math.random() * MAX_DELAY);
+          console.log(`Starting part ${id}, delayed by ${delay} ms`);
+
+          let success: boolean;
+          try {
+            await fakeHttpRequest(delay);
+            success = true;
+          } catch (_) {
+            success = false;
+          }
+
+          if (success) {
+            dispatch({ type: "UPLOAD_SUCCESS", payload: id });
+          } else {
+            dispatch({ type: "UPLOAD_FAILED", payload: id });
+          }
+          console.log(`=== Finished part ${id}, success ${success}`);
+
+          resolve(id);
+        });
+
+      queue.add(task);
+    }
+
+    console.log("Waiting for all parts to complete...");
+    const promises = queue.start();
+    await promises.onEmpty();
+  }
+
+  const getSuccessParts = (parts: Part[]) =>
+    parts.filter((p) => p.success === true);
+  const getFailedParts = (parts: Part[]) =>
+    parts.filter((p) => p.success === false);
+
+  useEffect(() => {
+    if (!state.isUploading) {
+      const numSuccess = getSuccessParts(state.items);
+      const numFailed = getFailedParts(state.items);
+      console.log(`Settled, success: ${numSuccess}, failed: ${numFailed}`);
+    }
+  }, [state.isUploading, state.items]);
+
+  const numFailed = getFailedParts(state.items).length;
+  const numDone = state.items.filter((p) => p.success !== null).length;
+
+  const partStyle = (part: Part) => {
+    const base: CSSProperties = {
+      fontFamily: "Helvetica, Arial, sans-serif",
+      backgroundColor: "#efefef",
+      margin: "5px",
+      display: "inline-block",
+      width: "45px",
+      padding: "3px",
+    };
+    if (part.success === true) {
+      base.backgroundColor = "green";
+      base.fontWeight = "bold";
+      base.color = "white";
+    } else if (part.success === false) {
+      base.backgroundColor = "red";
+      base.fontWeight = "bold";
+      base.color = "white";
+    }
+    return base;
+  };
+
   return (
-    <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.tsx</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
+    <div style={{ maxWidth: "100%" }}>
+      <h1>Pretend Queue</h1>
+      <button type="button" onClick={run}>
+        Run
+      </button>
+
+      <div style={{ maxWidth: "50%" }}>
+        {state.items.length > 0 && (
+          <div>
+            Progress ({Math.ceil((numDone / state.items.length) * 100)}
+            %) ({numFailed} failed):
+          </div>
+        )}
+        {state.items.map((part) => (
+          <span key={part.id} style={partStyle(part)}>
+            {part.id} {part.success === null && "⌛"}
+            {part.success === true && "✅"}
+            {part.success === false && "❌"}{" "}
+          </span>
+        ))}
+      </div>
     </div>
   );
 }
